@@ -5,11 +5,15 @@ const currentTimestamp = Math.floor(Date.now() / 1000);
 // Calculate the Unix timestamp of 1 week ago
 const timeFilter = currentTimestamp - (7 * 24 * 60 * 60);
 
-
 const graphqlQuery = `
 
 {
-  liens(where: {collection: "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"}) {
+  liens(where: { 
+    or: [
+      { repayTime_not: null },
+      { seizeTime_not: null }
+    ]
+  }) {
     id
     collection
     tokenId
@@ -25,9 +29,9 @@ const graphqlQuery = `
     timeStarted
   }
 }
-`;
 
-// console.log(graphqlQuery)
+
+`;
 
 const graphQLRequest = {
   method: 'post',
@@ -37,20 +41,10 @@ const graphQLRequest = {
   },
 };
 
-function getCalDate(unixTimestamp) {
-  const date = new Date(unixTimestamp * 1000); // Convert to milliseconds
-  return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-}
-
-
-
 // Send the GraphQL query
 axios(graphQLRequest)
   .then((response) => {
-
-
-
-    const queryResult = response.data.data
+    const queryResult = response.data.data;
 
     // Filter items that either have seizeTime or repayTime
     const filteredLiens = queryResult.liens.filter((lien) => {
@@ -64,67 +58,67 @@ axios(graphQLRequest)
       delete lien.repayTime;
     });
 
-    const loanDurationsByDate = {};
+    const loanDurationsByCollection = {};
 
-
-    // Iterate through filteredLiens to calculate loan durations and group them by date
+    // Iterate through filteredLiens to calculate loan durations and group them by collection
     filteredLiens.forEach((lien) => {
-      const date = new Date(lien.timeStarted * 1000).toISOString().split('T')[0]; // Convert timestamp to date
+      const collection = lien.collection;
 
-      if (!loanDurationsByDate[date]) {
-        loanDurationsByDate[date] = [];
+      if (!loanDurationsByCollection[collection]) {
+        loanDurationsByCollection[collection] = [];
       }
 
       if (lien.endTime) {
         // Calculate the duration in seconds
         const durationInSeconds = lien.endTime - lien.timeStarted;
-        loanDurationsByDate[date].push(durationInSeconds);
+        loanDurationsByCollection[collection].push(durationInSeconds);
       }
     });
 
-    // Calculate the average duration for each date
-    const dateArray = [];
+    // Calculate the average duration for each collection
+    const collectionArray = [];
     const averageDurations = [];
 
-    for (const date in loanDurationsByDate) {
-      const durations = loanDurationsByDate[date];
+    for (const collection in loanDurationsByCollection) {
+      const durations = loanDurationsByCollection[collection];
       const totalDuration = durations.reduce((acc, duration) => acc + duration, 0);
-      const averageDuration = totalDuration / durations.length;
+      const averageDuration = (totalDuration / durations.length / 3600).toFixed(1);
 
-      dateArray.push(date);
+      collectionArray.push(getNameByAddress(collection));
       averageDurations.push(averageDuration);
     }
 
-    // Now 'dateArray' contains the dates, and 'averageDurations' contains the corresponding average durations
+    // Now 'collectionArray' contains the collection names,
+    // and 'averageDurations' contains the corresponding average durations
 
-    // console.log('Date Array:', dateArray);
-    // console.log('Average Durations:', averageDurations);
-
-
-    const sortedData = dateArray.map((date, index) => ({
-      date,
-      averageDuration: averageDurations[index],
-    })).sort((a, b) => a.date.localeCompare(b.date));
-
-    // Extract sorted dateArray and averageDurations
-    const sortedDateArray = sortedData.map((data) => data.date);
-    const sortedAverageDurations = sortedData.map((data) => data.averageDuration);
-
-    // Convert averageDurations from seconds to minutes
-    const averageDurationsInMinutes = sortedAverageDurations.map((durationInSeconds) => {
-      const durationInMinutes = durationInSeconds / (60 * 60); // Convert seconds to hrs
-      return Math.round(durationInMinutes); // Round to the nearest whole number of minutes
-    });
-
-    // Now 'sortedDateArray' contains the sorted dates,
-    // and 'averageDurationsInMinutes' contains the corresponding average durations in minutes
-
-    console.log('Sorted Date Array:', sortedDateArray);
-    console.log('Average Durations (in hours):', averageDurationsInMinutes);
-
-
+    console.log('Collection Array:', collectionArray);
+    console.log('Average Durations:', averageDurations);
   })
   .catch((error) => {
     // Handle any errors
     console.error(error);
   });
+
+
+
+const addressToNameMap = {
+  '0xbd3531da5cf5857e7cfaa92426877b022e612cf8': "Pudgy Penguins",
+  '0xed5af388653567af2f388e6224dc7c4b3241c544': "Azuki",
+  '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d': "BAYC",
+  '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258': "OTHR",
+  '0x5af0d9827e0c53e4799bb226655a1de152a425a5': "Milady",
+  '0x306b1ea3ecdf94ab739f1910bbda052ed4a9f949': "Beanz",
+  '0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b': "CloneX",
+  '0xd3d9ddd0cf0a5f0bfb8f7fceae075df687eaebab': "Test NFT",
+  '0x60e4d786628fea6478f785a6d7e704777c86a7c6': "MAYC",
+  '0x8821bee2ba0df28761afff119d66390d594cd280': "DeGods",
+  '0xb6a37b5d14d502c3ab0ae6f3a0e058bc9517786e': "Elemental",
+  '0x3af2a97414d1101e2107a70e7f33955da1346305': "MBEAN",
+  '0xacf63e56fd08970b43401492a02f6f38b6635c91': "Kanpai Pandas",
+  '0xba30e5f9bb24caa003e9f2f0497ad287fdf95623': "BAKC",
+};
+
+// Function to get the name for a given address
+function getNameByAddress(address) {
+  return addressToNameMap[address] || "Unknown"; // Default to "Unknown" if address not found
+}
